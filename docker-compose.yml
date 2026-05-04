@@ -1,0 +1,151 @@
+version: "3"
+
+services:
+  namenode:
+    build:
+      context: namenode/
+    container_name: namenode
+    restart: always
+    ports:
+      - 9870:9870
+      - 9000:9000
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+      - ./Data:/Workspace/Data
+      - ./Code:/Workspace/Code
+    environment:
+      - CLUSTER_NAME=hadoop-cluster
+    env_file:
+      - ./hadoop.env
+
+  datanode-1:
+    build:
+      context: datanode/
+    container_name: datanode-1
+    restart: always
+    volumes:
+      - hadoop_datanode1:/hadoop/dfs/data
+    depends_on:
+      - namenode
+    env_file:
+      - ./hadoop.env
+    ports:
+      - 9864:9864
+
+  datanode-2:
+    build:
+      context: datanode/
+    container_name: datanode-2
+    restart: always
+    volumes:
+      - hadoop_datanode2:/hadoop/dfs/data
+    depends_on:
+      - namenode
+    env_file:
+      - ./hadoop.env
+    ports:
+      - 9865:9865
+
+  resourcemanager:
+    build:
+      context: resourcemanager/
+    container_name: resourcemanager
+    restart: always
+    depends_on:
+      - namenode
+      - datanode-1
+      - datanode-2
+      - nodemanager
+    ports:
+      - 8032:8032
+      - 8088:8088
+    env_file:
+      - ./hadoop.env
+
+  nodemanager:
+    build:
+      context: nodemanager/
+    container_name: nodemanager
+    restart: always
+    depends_on:
+      - namenode
+      - datanode-1
+      - datanode-2
+    env_file:
+      - ./hadoop.env
+
+  historyserver:
+    build:
+      context: historyserver/
+    container_name: historyserver
+    restart: always
+    depends_on:
+      - namenode
+      - datanode-1
+      - datanode-2
+      - resourcemanager
+    volumes:
+      - hadoop_historyserver:/hadoop/yarn/timeline
+    env_file:
+      - ./hadoop.env
+
+  spark-master:
+    build:
+      context: spark/
+    container_name: spark-master
+    restart: always
+    ports:
+      - "9090:8081"
+      - "7077:7077"
+    volumes:
+      - ./Data:/opt/spark-data
+    environment:
+      - SPARK_LOCAL_IP=spark-master
+      - SPARK_WORKLOAD=master
+    command: /bin/sh -c "./start-spark.sh"
+
+  spark-worker-a:
+    build:
+      context: spark/
+    container_name: spark-worker-a
+    restart: always
+    ports:
+      - "9091:8081"
+      - "7000:7000"
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKLOAD=worker
+      - SPARK_LOCAL_IP=spark-worker-a
+    volumes:
+      - ./Data:/opt/spark-data
+    command: /bin/sh -c "./start-spark.sh"
+
+  spark-worker-b:
+    build:
+      context: spark/
+    container_name: spark-worker-b
+    restart: always
+    ports:
+      - "9092:8081"
+      - "7001:7000"
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKLOAD=worker
+      - SPARK_LOCAL_IP=spark-worker-b
+    volumes:
+      - ./Data:/opt/spark-data
+    command: /bin/sh -c "./start-spark.sh"
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode1:
+  hadoop_datanode2:
+  hadoop_historyserver:
